@@ -1,0 +1,40 @@
+---
+title: "Problem Set 12: NYC Complaints Data Import and Tidying"
+author: "<Judah Altman>"
+date: "`r Sys.Date()`"
+format: html
+---
+
+```{r}
+#| label = "load-libraries-data",
+#| warning = FALSE,
+#| message = FALSE
+library(tidyverse)
+library(here)
+library(socviz)
+
+## Mapping
+library(sf)
+
+## Census
+## Make sure you have a census API key! You only need one.
+## https://api.census.gov/data/key_signup.html
+library(tidycensus)
+options(tigris_use_cache = TRUE)
+
+## Install the data package:
+## remotes::install_github("kjhealy/nycomplaints")
+library(nycomplaints)
+```
+
+```{r}
+nycomplaints
+nyc_zips
+census_vars
+```
+
+```{r}
+
+```
+
+
