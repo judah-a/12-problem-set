@@ -5,6 +5,8 @@ date: "`r Sys.Date()`"
 format: html
 ---
 
+Load required packages
+
 ```{r}
 #| label = "load-libraries-data",
 #| warning = FALSE,
@@ -30,11 +32,81 @@ library(nycomplaints)
 ```{r}
 nycomplaints
 nyc_zips
-census_vars
+census_vars_api_call <- census_vars %>% 
+  relocate(variable, .after = varname) %>% 
+  filter(variable != "B01001_001") %>% 
+  deframe()
+```
+
+## 1. Create a zipcode-level base map
+
+The `nyzip_demog` table has demographic data for New York City by zip code, but it does not have map data (i.e. the polygon geometry). Use `get_acs()` from the `tidycensus` package to get the spatial data by ZCTA.
+
+Hints:
+
+-   You should specify a year. Choose 2019.
+-   The zip code tabulation area ("zcta") geography is what you want.
+-   You only want data for New York State (NY).
+-   You have to ask the Census API for data for some variable by the geography you want. You can use any variable you want, or more than one. Some sample ones are given in `acs_vars`.
+-   If you get more than one variable, consider reshaping/pivoting the data to put those variables in columns. If you pivot the data you may find that you have to convert it to a tibble first and that while the result still has `geometry` column it is not recognized as an `sf` object. Look at `sf::st_as_sf()` to convert it back.
+-   If you get data for New York State, you will get all the zip codes in the state. You only want data for the zip codes that are in NYC. But you know what those are.
+
+Additionally, this may be a good time to think about dividing your project up in to more than one file. For example, you could have one R script that does the work above to produce an object you could save, or that you source into this file. (See `?source`.)
+
+## Additional variables
+
+The ACS has a lot of data. Consider the *very* long list of variables here:
+
+```{r}
+## Table of all 2019 ACS variables:
+acs_vars <- load_variables(year = 2019, dataset = "acs5")
+```
+
+Load Census Data - Data Import
+
+```{r}
+nyzip_demog <- get_acs(
+  state = "NY",
+  geography = "zcta",
+  zcta = nyc_zips$zip,
+  variables = census_vars_api_call,
+  geometry = TRUE,
+  year = 2019,
+  summary_var = "B01001_001"
+)
+```
+
+Data Tidying
+
+```{r}
+nyzip_demog <- nyzip_demog %>% 
+  rename(zip = NAME, population_est = summary_est, population_moe = summary_moe) %>% 
+  mutate(zip = as.numeric(str_replace_all(zip, "ZCTA5 ", "")))
+```
+
+Creating a wider format so that each observation or row is a unique zip code, that the variables then describe the population and median income of
+
+```{r}
+nyzip_demog_wide <- nyzip_demog %>% 
+  pivot_wider(names_from = variable, values_from = c(estimate, moe)) %>% 
+  drop_na()
+
+nyzip_demog_wide_small <- nyzip_demog_wide %>% 
+  select(-contains("moe")) %>% 
+  rename_with(\(x) str_replace_all(x, "estimate_", "")) %>% 
+  relocate(geometry, .before = population_est)
 ```
 
 ```{r}
-
+saveRDS(nyzip_demog_wide_small, file = "nyzip_census.rds")
 ```
 
+## Other information
 
+*Hint:* You can use `st_drop_geometry()` to change a spatial table into a simple tibble:
+
+```{r}
+ ## See how the `geometry` column disappears
+zip_demog_data_only <- nyzip_demog %>% 
+  st_drop_geometry()
+```
