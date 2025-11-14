@@ -25,8 +25,6 @@ options(tigris_use_cache = TRUE)
 ## Install the data package:
 ## remotes::install_github("kjhealy/nycomplaints")
 library(nycomplaints)
-
-
 ```
 
 # The dataset
@@ -53,53 +51,67 @@ nyc_zips
 census_vars
 ```
 
-## 1. Create a zipcode-level base map
-
-The `nyzip_demog` table has demographic data for New York City by zip code, but it does not have map data (i.e. the polygon geometry). Use `get_acs()` from the `tidycensus` package to get the spatial data by ZCTA.
-
-Hints:
-
--   You should specify a year. Choose 2019.
--   The zip code tabulation area ("zcta") geography is what you want.
--   You only want data for New York State (NY).
--   You have to ask the Census API for data for some variable by the geography you want. You can use any variable you want, or more than one. Some sample ones are given in `acs_vars`.
--   If you get more than one variable, consider reshaping/pivoting the data to put those variables in columns. If you pivot the data you may find that you have to convert it to a tibble first and that while the result still has `geometry` column it is not recognized as an `sf` object. Look at `sf::st_as_sf()` to convert it back.
--   If you get data for New York State, you will get all the zip codes in the state. You only want data for the zip codes that are in NYC. But you know what those are.
-
-Additionally, this may be a good time to think about dividing your project up in to more than one file. For example, you could have one R script that does the work above to produce an object you could save, or that you source into this file. (See `?source`.)
-
-## Additional variables
-
-The ACS has a lot of data. Consider the *very* long list of variables here:
-
-```{r}
-## Table of all 2019 ACS variables:
-acs_vars <- load_variables(year = 2019, dataset = "acs5")
-```
-
-## Other information
-
-*Hint:* You can use `st_drop_geometry()` to change a spatial table into a simple tibble:
-
-```{r}
-## See how the `geometry` column disappears
-zip_data |>
-  st_drop_geometry()
-```
-
 # Things to do
 
 ## 1. Briefly Describe the Dataset
 
 -   Summarize the `nycomplaints` tibble in a way you think is informative to you.
 
+```{r}
+head(nycomplaints)
+ncol(nycomplaints)
+colnames(nycomplaints)
+nrow(nycomplaints)
+length(unique(nycomplaints$unique_key))
+```
+
+This is a tibble of constituent complaints registered by NYC Council district offices. It contains 341,299 rows and 11 columns, where each row (for the most part, to be investigated below) is a complaint. By columns, the unique key column identifies each complaint, the account refers to the council district that the complaint was filed in, the open and close date refer to the respective dates that the complaint was filed and when the case was closed, the complaint type categorizes the type of complaint, the descriptor gives a specific category within the broader type, and the remaining variables give the zip, borough, city, council district and community board of the constituent (note that the council district listed here might be different from the council district listed under account, as the account district refers to which district the complaint was filed in, while the council district refers to the council district that the constituent that filed the complaint lives in).
+
 ## 2 Look at each column/variable in a little more detail
 
 -   Explore the basic structure of the data, by e.g. writing code to summarize the variables or investigate aspects of them that seem interesting. You can also create some initial rough exploratory plots if you like, in addition to tables or other summaries. As you go, explain here what it is you are doing and why.
 
+```{r}
+#overall data structure - checking the number of rows and columns and the types of data in the tibble
+head(nycomplaints)
+ncol(nycomplaints)
+colnames(nycomplaints)
+nrow(nycomplaints)
+
+nycomplaints %>% 
+  map(class)
+
+#unique ID - checking for duplicate rows
+length(unique(nycomplaints$unique_key))
+nrow(nycomplaints)
+duplicate_keys <- nycomplaints %>% 
+  filter(duplicated(nycomplaints$unique_key)) %>% 
+  select(unique_key) %>% 
+  pull() %>% 
+  str_c(collapse = "")
+
+#checking if they are actually duplicates (they are)
+duplicate_nycomplaints <- nycomplaints %>% 
+  filter(str_detect(duplicate_keys, unique_key))
+View(duplicate_nycomplaints)
+
+#keeping only distinct ID keys (removing duplicates)
+nycomplaints <- nycomplaints %>% 
+  distinct(unique_key, .keep_all = TRUE)
+length(nycomplaints)
+
+#
+```
+
 ## 3. Make some plots or maps
 
 -   Following on from the tabular summarize, make some plots that you think show something interesting about the data. Make sure they look presentable and effective to you. Make a note about why you're doing each one. If you like, merge in data from elsewhere (e.g. from Census variables).
+
+```{r}
+nyzip_census <- readRDS(here("nyzip_census.rds"))
+```
+
+
 
 ## 4. Try to make one properly-polished plot or map
 
