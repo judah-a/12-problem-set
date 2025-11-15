@@ -95,12 +95,80 @@ duplicate_nycomplaints <- nycomplaints %>%
   filter(str_detect(duplicate_keys, unique_key))
 View(duplicate_nycomplaints)
 
-#keeping only distinct ID keys (removing duplicates)
-nycomplaints <- nycomplaints %>% 
-  distinct(unique_key, .keep_all = TRUE)
-length(nycomplaints)
+#account - what are the different council districts - there are 51
+nycomplaints %>% 
+  group_by(account) %>% 
+  summarize() %>% 
+  print(n = Inf)
 
-#
+#check council district here (should be the same as account), but ends up being different than account - there are 157 council districts, perhaps reflects a wider set of council districts as compared to council districts that file complaints, as the council districts here, except for a few coding errors, go all the way to 103 - do need to clean up some of the council names
+nycomplaints %>% 
+  group_by(council_dist) %>% 
+  summarize() %>% 
+  arrange() %>% 
+  print(n = Inf)
+
+#earliest and latest date of opening - data set runs from January 1st 2015 to January 9 2025 for opened files
+nycomplaints %>% 
+  select(opendate) %>% 
+  filter(opendate == min(opendate) | opendate == max(opendate))
+
+#earliest and latest date of closing - data set runs from January 2nd 2015 to January 9 2025, there are also some NA values for closing likely corresponding to non-closed cases
+nycomplaints %>% 
+  select(closedate) %>% 
+  drop_na() %>% 
+  filter(closedate == min(closedate) | closedate == max(closedate))
+
+#looking at complaint types - very uneven coding of complaints, with many that makes sense, but also many with spelling errors
+nycomplaints %>% 
+  group_by(complaint_type) %>% 
+  summarize() %>% 
+  print(n = Inf)
+
+#looking at descriptors - too many to summarize so split by complaint type and see how many descriptors are in each complaint type
+nycomplaints %>% 
+  group_by(descriptor) %>% 
+  summarise()
+  
+descriptors_by_complaint_type <- nycomplaints %>% 
+  group_by(complaint_type) %>% 
+  reframe(unique(descriptor))
+
+#checking for zip - many weird zips that aren't actually zips
+nycomplaints %>% 
+  group_by(zip) %>% 
+  summarise() %>% 
+  print(n = 100)
+
+#borough - normal except for presence of NAs
+nycomplaints %>% 
+  group_by(borough) %>% 
+  summarise()
+
+#city - very odd, innacurate and messy, over 1400 different inputs
+nycomplaints %>% 
+  group_by(city) %>% 
+  summarise()
+
+#checking community board, mostly matches boroughs subset by board number but with some numbers that don't have a borough
+nycomplaints %>% 
+  group_by(community_board) %>% 
+  summarise() %>% 
+  arrange() %>% 
+  print(n = Inf)
+
+#tidying
+#keeping only distinct ID keys (removing duplicates), filtering out non-existent zips,  changing council districts to match account district patterns, merging the table with nyc_zips to clean up borough and city names
+nycomplaints_clean <- nycomplaints %>% 
+  distinct(unique_key, .keep_all = TRUE) %>% 
+  filter(zip %in% nyc_zips$zip) %>% 
+  mutate(zip = as.numeric(zip)) %>% 
+  mutate(council_dist = str_replace_all(council_dist, "NYCC0..", "NYCC.."))
+
+#merging nyc_zips and nycomplaints_clean to clean up the borough and city names
+nycomplaints_clean <- nycomplaints_clean %>% 
+  left_join(nyc_zips, by = "zip") %>% 
+  select(-borough.x, -city.x)
 ```
 
 ## 3. Make some plots or maps
@@ -108,7 +176,32 @@ length(nycomplaints)
 -   Following on from the tabular summarize, make some plots that you think show something interesting about the data. Make sure they look presentable and effective to you. Make a note about why you're doing each one. If you like, merge in data from elsewhere (e.g. from Census variables).
 
 ```{r}
+#loading in census data already generated in the import_tidy file
 nyzip_census <- readRDS(here("nyzip_census.rds"))
+
+#merging the two tibbles by zip
+nycomplaints_spatial <- nycomplaints_clean %>% 
+  left_join(nyzip_census, by = "zip")
+
+#pulling out information about complaints by zip
+complaints_by_zip <- nycomplaints_clean %>% 
+  group_by(zip) %>% 
+  tally()
+
+most_complaint_by_zip <- nycomplaints_clean %>% 
+  group_by(zip, complaint_type) %>% 
+  tally() %>% 
+  slice_max(n)
+
+#showing the main types of complaints that people file
+most_complaint_by_zip %>% 
+  group_by(complaint_type) %>% 
+  summarise(count = sum(n)) %>% 
+  filter(count > 4) %>% 
+  ggplot(aes(y = complaint_type, x = count)) +
+  geom_col()
+
+
 ```
 
 
