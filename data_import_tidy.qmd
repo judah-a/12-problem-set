@@ -34,7 +34,7 @@ nycomplaints
 nyc_zips
 census_vars_api_call <- census_vars %>% 
   relocate(variable, .after = varname) %>% 
-  filter(variable %in% c("B02001_002", "B02001_003", "B02001_005", "B02001_008")) %>% 
+  filter(variable %in% c("B02001_002", "B02001_003", "B02001_005", "B19013_001")) %>% 
   deframe()
 ```
 

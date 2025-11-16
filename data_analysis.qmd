@@ -15,12 +15,15 @@ library(socviz)
 
 ## Mapping
 library(sf)
+library(ggpattern)
+library(patchwork)
 
 ## Census
 ## Make sure you have a census API key! You only need one.
 ## https://api.census.gov/data/key_signup.html
 library(tidycensus)
 options(tigris_use_cache = TRUE)
+options(scipen = 999)
 
 ## Install the data package:
 ## remotes::install_github("kjhealy/nycomplaints")
@@ -182,7 +185,7 @@ nyzip_census <- readRDS(here("nyzip_census.rds"))
 
 #merging the two tibbles by zip
 nycomplaints_spatial <- nycomplaints_clean %>% 
-  left_join(nyzip_census, by = "zip")
+  left_join(nyzip_census_wide, by = "zip")
 
 #creating a zip and geometry tibble
 zip_geometry <- nycomplaints_spatial %>% 
@@ -198,6 +201,12 @@ types_of_complaints_by_zip <- nycomplaints_clean %>%
   group_by(zip, complaint_type) %>% 
   tally()
 
+most_complaints <- nycomplaints_spatial %>%
+  group_by(geometry, zip, complaint_type) %>% 
+  tally() %>% 
+  slice_max(n) %>% 
+  filter(!st_is_empty(geometry) & n > 1)
+
 #showing the aggregate types of complaints that people file (over 1000 total)
 types_of_complaints_by_zip %>% 
   group_by(complaint_type) %>% 
@@ -207,7 +216,7 @@ types_of_complaints_by_zip %>%
   geom_col()
 
 #most complaints map
-nycomplaints_spatial %>%
+most_complaints_map <- nycomplaints_spatial %>%
   group_by(geometry, zip, complaint_type) %>% 
   tally() %>% 
   slice_max(n) %>% 
@@ -215,15 +224,32 @@ nycomplaints_spatial %>%
   ggplot(aes(geometry = geometry, fill = complaint_type)) +
   geom_sf(color = NA) +
   theme_void()
+print(most_complaints_map)
 
-#by population map
-nyzip_census %>% 
+#by population percents map
+pop_percent <- nyzip_census %>% 
   filter(variable != "med_hhinc") %>% 
   mutate(percent = 100 * (estimate / population_est)) %>% 
   ggplot(aes(fill = percent)) +
   facet_wrap(~variable) +
   geom_sf(color = NA) +
   theme_void()
+print(pop_percent)
+
+#pulling out median income by zip
+income_by_zip <- nycomplaints_spatial %>% 
+  select(zip, med_hhinc) %>% 
+  group_by(zip, med_hhinc) %>% 
+  summarise()
+
+
+#median income map
+income_map <- nyzip_census_wide %>%
+  ggplot(aes(fill = med_hhinc)) +
+  geom_sf(color = NA) +
+  theme_void() +
+  scale_fill_viridis_c(trans = "sqrt")
+print(income_map)
 ```
 
 ## 4. Try to make one properly-polished plot or map
@@ -235,3 +261,59 @@ nyzip_census %>%
 -   
 
     b.  Try saving this plot or map using `ggsave()`. Create it as a PNG or PDF file. Make its dimensions (width and height) the right size for what you draw.
+    
+```{r}
+complaints_income <- most_complaints %>% 
+  left_join(income_by_zip, by = "zip")
+
+income_summary <- summary(complaints_income$med_hhinc) %>% 
+  unname()
+income_summary <- income_summary[-4] #removing mean value
+income_summary[1] <- income_summary[1] - 1 #ensuring that the minimum value is included
+  
+complaints_income$income_summary <- cut(complaints_income$med_hhinc, breaks = income_summary, 
+    labels = c("21,447 - 54,184", "54,184 - 69,385", "69,385 - 92,840", "Above 92,840"))
+
+income_nice <- complaints_income %>% 
+  ggplot(aes(fill = income_summary, geometry = geometry)) +
+  geom_sf() +
+  scale_fill_brewer(palette = 16) +
+  theme_void() +
+  labs(title = "NYC Zip Codes by Income Quartiles",
+       fill = "Income Quartiles") +
+  theme(legend.position = "bottom", plot.title = element_text(size = 15, hjust = 0.5))
+
+complaint_type_nice <- complaints_income %>% 
+  ggplot(aes(fill = complaint_type, geometry = geometry)) +
+  geom_sf() +
+  scale_fill_viridis_d() +
+  theme_void() +
+  labs(title = "NYC Zip Codes by Main Complaint Type",
+       fill = "Complaint Types") +
+  theme(legend.position = "bottom", plot.title = element_text(size = 15, hjust = 0.5))
+
+
+complaint_census_map <- income_nice + complaint_type_nice + plot_annotation(title = "NYC Comparison of Incomes by Complaints",
+                                                                            theme = theme(plot.title = element_text(size = 20, hjust = 0.5)))
+ggsave(here("complaint_census_map.pdf"), plot = complaint_census_map, device = "pdf", width = 15, height = 8)
+```
+
+Attempted to use ggpattern to overlay patterns based on complaint type but my computer either broke each time or wouldn't parse out 7 types of patterns
+
+```{r}
+complaints_income %>% 
+  ggplot(aes(geometry = geometry)) +
+  geom_sf_pattern(aes(pattern = complaint_type, fill = income_summary)
+  ) +
+  scale_pattern_manual(
+    values = c(
+      "Cultural Affairs" = "pch",
+      "Housing and Buildings" = "circle",
+      "Transportation" = "crosshatch",
+      "Utilities" = "stripe",
+      "Finance" = "none",
+      "Quality of Life" = "rose",
+      "Immigration" = "regular_polygon")) +
+  theme_void()
+```
+
