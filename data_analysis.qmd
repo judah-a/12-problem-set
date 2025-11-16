@@ -177,34 +177,54 @@ nycomplaints_clean <- nycomplaints_clean %>%
 
 ```{r}
 #loading in census data already generated in the import_tidy file
+nyzip_census_wide <- readRDS(here("nyzip_census_wide.rds"))
 nyzip_census <- readRDS(here("nyzip_census.rds"))
 
 #merging the two tibbles by zip
 nycomplaints_spatial <- nycomplaints_clean %>% 
   left_join(nyzip_census, by = "zip")
 
+#creating a zip and geometry tibble
+zip_geometry <- nycomplaints_spatial %>% 
+  group_by(geometry, zip) %>% 
+  summarize()
+
 #pulling out information about complaints by zip
 complaints_by_zip <- nycomplaints_clean %>% 
   group_by(zip) %>% 
   tally()
 
-most_complaint_by_zip <- nycomplaints_clean %>% 
+types_of_complaints_by_zip <- nycomplaints_clean %>% 
   group_by(zip, complaint_type) %>% 
-  tally() %>% 
-  slice_max(n)
+  tally()
 
-#showing the main types of complaints that people file
-most_complaint_by_zip %>% 
+#showing the aggregate types of complaints that people file (over 1000 total)
+types_of_complaints_by_zip %>% 
   group_by(complaint_type) %>% 
   summarise(count = sum(n)) %>% 
-  filter(count > 4) %>% 
+  filter(count > 1000) %>% 
   ggplot(aes(y = complaint_type, x = count)) +
   geom_col()
 
+#most complaints map
+nycomplaints_spatial %>%
+  group_by(geometry, zip, complaint_type) %>% 
+  tally() %>% 
+  slice_max(n) %>% 
+  filter(!st_is_empty(geometry) & n > 1) %>% #filtering out only rows with geometry and complaints more than 1
+  ggplot(aes(geometry = geometry, fill = complaint_type)) +
+  geom_sf(color = NA) +
+  theme_void()
 
+#by population map
+nyzip_census %>% 
+  filter(variable != "med_hhinc") %>% 
+  mutate(percent = 100 * (estimate / population_est)) %>% 
+  ggplot(aes(fill = percent)) +
+  facet_wrap(~variable) +
+  geom_sf(color = NA) +
+  theme_void()
 ```
-
-
 
 ## 4. Try to make one properly-polished plot or map
 
