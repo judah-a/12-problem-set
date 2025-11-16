@@ -34,7 +34,7 @@ nycomplaints
 nyc_zips
 census_vars_api_call <- census_vars %>% 
   relocate(variable, .after = varname) %>% 
-  filter(variable != "B01001_001") %>% 
+  filter(variable %in% c("B02001_002", "B02001_003", "B02001_005", "B02001_008")) %>% 
   deframe()
 ```
 
@@ -82,9 +82,13 @@ Data Tidying
 nyzip_demog <- nyzip_demog %>% 
   rename(zip = NAME, population_est = summary_est, population_moe = summary_moe) %>% 
   mutate(zip = as.numeric(str_replace_all(zip, "ZCTA5 ", "")))
+
+#removing margins of error
+nyzip_demog_small <- nyzip_demog %>% 
+  select(-contains("moe"))
 ```
 
-Creating a wider format so that each observation or row is a unique zip code, that the variables then describe the population and median income of
+Creating a wider format so that each observation or row is a unique zip code, that the variables then describe the population and median income of each zip
 
 ```{r}
 nyzip_demog_wide <- nyzip_demog %>% 
@@ -98,7 +102,8 @@ nyzip_demog_wide_small <- nyzip_demog_wide %>%
 ```
 
 ```{r}
-saveRDS(nyzip_demog_wide_small, file = "nyzip_census.rds")
+saveRDS(nyzip_demog_wide_small, file = "nyzip_census_wide.rds")
+saveRDS(nyzip_demog_small, file = "nyzip_census.rds")
 ```
 
 ## Other information
